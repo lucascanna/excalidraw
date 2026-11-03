@@ -1501,3 +1501,278 @@ describe("googly eyes overlay", () => {
     expect(renderStaticScene).toHaveBeenCalled();
   });
 });
+
+describe("googly eyes frame clipping", () => {
+  type Rect = { x: number; y: number; width: number; height: number };
+  type ClipEvent = CanvasEvent & {
+    transform: [number, number, number, number, number, number];
+  };
+
+  /**
+   * The bounds of a clip path, in device pixels: a rect, or a rounded rect
+   * (moveTo and corner ellipses, as the canvas draws `roundRect`).
+   */
+  const getPathBounds = (path: ClipEvent[]): Rect => {
+    const points = path.flatMap(({ type, transform, props }) => {
+      const [a, b, c, d, e, f] = transform;
+      const toDevicePoint = (x: number, y: number) => [
+        a * x + c * y + e,
+        b * x + d * y + f,
+      ];
+      if (type === "rect" || type === "roundRect") {
+        return [
+          toDevicePoint(props.x, props.y),
+          toDevicePoint(props.x + props.width, props.y + props.height),
+        ];
+      }
+      if (type === "ellipse" || type === "arc") {
+        const radiusX = props.radiusX ?? props.radius;
+        const radiusY = props.radiusY ?? props.radius;
+        return [
+          toDevicePoint(props.x - radiusX, props.y - radiusY),
+          toDevicePoint(props.x + radiusX, props.y + radiusY),
+        ];
+      }
+      if (type === "moveTo" || type === "lineTo") {
+        return [toDevicePoint(props.x, props.y)];
+      }
+      return [];
+    });
+    const xs = points.map(([x]) => x);
+    const ys = points.map(([, y]) => y);
+    const [minX, minY] = [Math.min(...xs), Math.min(...ys)];
+    return {
+      x: minX,
+      y: minY,
+      width: Math.max(...xs) - minX,
+      height: Math.max(...ys) - minY,
+    };
+  };
+
+  /**
+   * Replays a canvas's events and returns, for each call of `type`, the clip
+   * rects (device pixels) in effect at that point, following save / restore.
+   */
+  const getClipsAt = (canvas: HTMLCanvasElement, type: "arc" | "drawImage") => {
+    const events = (
+      canvas.getContext("2d") as any
+    ).__getEvents() as ClipEvent[];
+    const stack: Rect[][] = [];
+    let clips: Rect[] = [];
+    const calls: { props: any; clips: Rect[] }[] = [];
+    for (const event of events) {
+      if (event.type === "save") {
+        stack.push(clips);
+      } else if (event.type === "restore") {
+        clips = stack.pop() ?? [];
+      } else if (event.type === "clip") {
+        clips = [...clips, getPathBounds(event.props.path)];
+      } else if (event.type === type) {
+        calls.push({ props: event.props, clips });
+      }
+    }
+    return calls;
+  };
+
+  /** a scene rect in device pixels, as the canvases draw it */
+  const toDevice = ({ x, y, width, height }: Rect): Rect => {
+    const scale = h.state.zoom.value * window.devicePixelRatio;
+    return {
+      x: (x + h.state.scrollX) * scale,
+      y: (y + h.state.scrollY) * scale,
+      width: width * scale,
+      height: height * scale,
+    };
+  };
+
+  const isRect = (actual: Rect, expected: Rect) =>
+    Math.abs(actual.x - expected.x) < 1e-6 &&
+    Math.abs(actual.y - expected.y) < 1e-6 &&
+    Math.abs(actual.width - expected.width) < 1e-6 &&
+    Math.abs(actual.height - expected.height) < 1e-6;
+
+  /** the eye arcs of the overlay's last paint (one eyed element) */
+  const getEyeArcClips = () =>
+    getClipsAt(getGooglyEyesCanvas(), "arc").slice(-6);
+
+  const clearEvents = () => {
+    clearGooglyEyesEvents();
+    (GlobalTestState.canvas.getContext("2d") as any).__clearEvents();
+  };
+
+  /** every eye arc is drawn inside the frame rect, and so is the static scene */
+  const expectClippedTo = async (frameRect: Rect) => {
+    const deviceRect = toDevice(frameRect);
+    await waitFor(() => {
+      const arcs = getEyeArcClips();
+      expect(arcs).toHaveLength(6);
+      for (const { clips } of arcs) {
+        expect(clips.some((clip) => isRect(clip, deviceRect))).toBe(true);
+      }
+    });
+    // the static scene clips its elements to the same rect
+    expect(
+      getClipsAt(GlobalTestState.canvas, "drawImage").some(({ clips }) =>
+        clips.some((clip) => isRect(clip, deviceRect)),
+      ),
+    ).toBe(true);
+  };
+
+  const FRAME = { x: 100, y: 100, width: 200, height: 200 };
+
+  const createFrame = () =>
+    API.createElement({ type: "frame", id: "frame", ...FRAME });
+
+  it("clips the eyes of a framed shape that is partly outside its frame", async () => {
+    const frame = createFrame();
+    // its right eye is outside the frame
+    const rectangle = withEyes(
+      API.createElement({
+        type: "rectangle",
+        x: 200,
+        y: 150,
+        width: 200,
+        height: 100,
+        frameId: frame.id,
+      }),
+    );
+    clearEvents();
+    setScene([rectangle, frame]);
+
+    await expectClippedTo(FRAME);
+    const [leftWhite, , , rightWhite] = getEyeArcClips().map(
+      ({ props }) => props,
+    );
+    expect(leftWhite.x).toBeLessThan(FRAME.x + FRAME.width);
+    expect(rightWhite.x).toBeGreaterThan(FRAME.x + FRAME.width);
+  });
+
+  it("does not clip the eyes of a shape outside any frame", async () => {
+    const frame = createFrame();
+    const rectangle = withEyes(
+      API.createElement({
+        type: "rectangle",
+        x: 200,
+        y: 150,
+        width: 200,
+        height: 100,
+      }),
+    );
+    clearEvents();
+    setScene([rectangle, frame]);
+
+    await waitFor(() => expect(getEyeArcClips()).toHaveLength(6));
+    for (const { clips } of getEyeArcClips()) {
+      expect(clips).toEqual([]);
+    }
+  });
+
+  it("clips the eyes of a shape being dragged into a frame", async () => {
+    const frame = createFrame();
+    // no frameId yet: the drag highlights the frame it would join
+    const rectangle = withEyes(
+      API.createElement({
+        type: "rectangle",
+        x: 200,
+        y: 150,
+        width: 200,
+        height: 100,
+      }),
+    );
+    setScene([rectangle, frame]);
+    await waitFor(() => expect(getEyeArcClips()).toHaveLength(6));
+
+    clearEvents();
+    API.setAppState({
+      selectedElementIds: { [rectangle.id]: true },
+      selectedElementsAreBeingDragged: true,
+      frameToHighlight: getElement(frame.id) as any,
+    });
+
+    await expectClippedTo(FRAME);
+  });
+
+  it("does not clip a selected shape over a highlighted frame unless dragged", async () => {
+    const frame = createFrame();
+    const rectangle = withEyes(
+      API.createElement({
+        type: "rectangle",
+        x: 200,
+        y: 150,
+        width: 200,
+        height: 100,
+      }),
+    );
+    setScene([rectangle, frame]);
+    await waitFor(() => expect(getEyeArcClips()).toHaveLength(6));
+
+    clearEvents();
+    API.setAppState({
+      selectedElementIds: { [rectangle.id]: true },
+      selectedElementsAreBeingDragged: false,
+      frameToHighlight: getElement(frame.id) as any,
+    });
+
+    await waitFor(() => expect(getEyeArcClips()).toHaveLength(6));
+    for (const { clips } of getEyeArcClips()) {
+      expect(clips).toEqual([]);
+    }
+  });
+
+  it("clips the eyes of a framed shape a render override moves out of its frame", async () => {
+    const frame = createFrame();
+    const rectangle = withEyes(
+      API.createElement({
+        type: "rectangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 100,
+        frameId: frame.id,
+      }),
+    );
+    setScene([rectangle, frame]);
+    await waitFor(() => expect(getEyeArcClips()).toHaveLength(6));
+
+    clearEvents();
+    // rendered at (450, 150): no longer overlapping its frame
+    act(() =>
+      h.app.api.setElementRenderOverrides(
+        new Map([[rectangle.id, { offset: { x: 300, y: 0 } }]]),
+      ),
+    );
+
+    await expectClippedTo(FRAME);
+    // the eyes are drawn where the override puts the shape
+    const [leftWhite, , , rightWhite] = getEyeArcClips().map(
+      ({ props }) => props,
+    );
+    expect((leftWhite.x + rightWhite.x) / 2).toBeCloseTo(200 + 300);
+  });
+
+  it("clips the eyes of a framed shape to its frame moved by a render override", async () => {
+    const frame = createFrame();
+    const rectangle = withEyes(
+      API.createElement({
+        type: "rectangle",
+        x: 150,
+        y: 150,
+        width: 100,
+        height: 100,
+        frameId: frame.id,
+      }),
+    );
+    setScene([rectangle, frame]);
+    await waitFor(() => expect(getEyeArcClips()).toHaveLength(6));
+
+    clearEvents();
+    // the frame renders at (500, 100), away from its child
+    act(() =>
+      h.app.api.setElementRenderOverrides(
+        new Map([[frame.id, { offset: { x: 400, y: 0 } }]]),
+      ),
+    );
+
+    await expectClippedTo({ ...FRAME, x: FRAME.x + 400 });
+  });
+});
