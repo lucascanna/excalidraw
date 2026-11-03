@@ -3,13 +3,10 @@ import { viewportCoordsToSceneCoords } from "@excalidraw/common";
 import {
   getBoundTextElement,
   getElementBounds,
-  getRenderElementWithPositionOverride,
-  getTargetFrame,
   isIframeLikeElement,
   isTextElement,
   renderElement,
   resolveElementRenderState,
-  shouldApplyFrameClip,
 } from "@excalidraw/element";
 
 import type { ElementRenderState } from "@excalidraw/element";
@@ -33,7 +30,7 @@ import {
   getNormalizedCanvasDimensions,
   snapScrollToDevicePixels,
 } from "./helpers";
-import { frameClip } from "./staticScene";
+import { clipElementToItsFrame } from "./staticScene";
 
 import type { GooglyEye, PupilOffset } from "./googlyEyes";
 
@@ -249,37 +246,19 @@ export class GooglyEyesAnimator {
       );
 
     const inFrameGroupsMap = new Map<string, boolean>();
+    // the same frame clip as the static scene, dragging into a frame included
     const clipToFrame = (
       element: NonDeletedExcalidrawElement,
       renderState: ElementRenderState,
-    ) => {
-      if (
-        !element.frameId ||
-        !appState.frameRendering.enabled ||
-        !appState.frameRendering.clip
-      ) {
-        return;
-      }
-      const targetFrame = getTargetFrame(element, elementsMap, appState);
-      if (!targetFrame) {
-        return;
-      }
-      const frame = getRenderElementWithPositionOverride(
-        targetFrame,
-        getRenderState(targetFrame).offset,
-      );
-      if (
-        shouldApplyFrameClip(
-          getRenderElementWithPositionOverride(element, renderState.offset),
-          frame,
-          appState,
-          elementsMap,
-          inFrameGroupsMap,
-        )
-      ) {
-        frameClip(frame, context, renderConfig, appState);
-      }
-    };
+    ) =>
+      clipElementToItsFrame(element, renderState, {
+        context,
+        renderConfig,
+        appState,
+        elementsMap,
+        getRenderState,
+        inFrameGroupsMap,
+      });
 
     const eyesBounds: Bounds[] = [];
     const coversEyes = (
