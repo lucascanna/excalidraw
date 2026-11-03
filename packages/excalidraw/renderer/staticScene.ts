@@ -42,6 +42,7 @@ import {
   getLinkHandleFromCoords,
 } from "../components/hyperlink/helpers";
 
+import { drawGooglyEyes, getGooglyEyes, hasGooglyEyes } from "./googlyEyes";
 import {
   bootstrapCanvas,
   getNormalizedCanvasDimensions,
@@ -186,6 +187,65 @@ export const frameClip = (
     -(frame.x + appState.scrollX),
     -(frame.y + appState.scrollY),
   );
+};
+
+/**
+ * Clips the context to the frame the element renders in, when frame clipping
+ * applies to it (also while it is dragged into a frame, or translated by a
+ * render override). Shared by the static scene and the googly eyes layer so
+ * both clip the same way.
+ */
+export const clipElementToItsFrame = (
+  element: NonDeletedExcalidrawElement,
+  renderState: ElementRenderState,
+  {
+    context,
+    renderConfig,
+    appState,
+    elementsMap,
+    getRenderState,
+    inFrameGroupsMap,
+  }: {
+    context: CanvasRenderingContext2D;
+    renderConfig: StaticCanvasRenderConfig;
+    appState: StaticCanvasAppState;
+    elementsMap: ElementsMap;
+    getRenderState: (element: ExcalidrawElement) => ElementRenderState;
+    /** cache shared across one render */
+    inFrameGroupsMap: Map<string, boolean>;
+  },
+) => {
+  if (
+    !(element.frameId || appState.frameToHighlight?.id) ||
+    !appState.frameRendering.enabled ||
+    !appState.frameRendering.clip
+  ) {
+    return;
+  }
+  const targetFrame = getTargetFrame(element, elementsMap, appState);
+  if (!targetFrame) {
+    return;
+  }
+  const frameState = getRenderState(targetFrame);
+  const frame = getRenderElementWithPositionOverride(
+    targetFrame,
+    frameState.offset,
+  );
+  const isTranslated = (state: ElementRenderState) =>
+    state.offset.x !== 0 || state.offset.y !== 0;
+  if (
+    (element.frameId === frame.id &&
+      (isTranslated(renderState) || isTranslated(frameState))) ||
+    shouldApplyFrameClip(
+      getRenderElementWithPositionOverride(element, renderState.offset),
+      frame,
+      appState,
+      elementsMap,
+      inFrameGroupsMap,
+    )
+  ) {
+    frameClip(frame, context, renderConfig, appState);
+  }
 };
 
 type LinkIconCanvas = HTMLCanvasElement & { zoom: number };
@@ -358,39 +418,15 @@ const _renderStaticScene = ({
   const clipElementToFrame = (
     element: NonDeletedExcalidrawElement,
     renderState: ElementRenderState,
-  ) => {
-    if (
-      !(element.frameId || appState.frameToHighlight?.id) ||
-      !appState.frameRendering.enabled ||
-      !appState.frameRendering.clip
-    ) {
-      return;
-    }
-    const targetFrame = getTargetFrame(element, elementsMap, appState);
-    if (!targetFrame) {
-      return;
-    }
-    const frameState = getRenderState(targetFrame);
-    const frame = getRenderElementWithPositionOverride(
-      targetFrame,
-      frameState.offset,
-    );
-    const isTranslated = (state: ElementRenderState) =>
-      state.offset.x !== 0 || state.offset.y !== 0;
-    if (
-      (element.frameId === frame.id &&
-        (isTranslated(renderState) || isTranslated(frameState))) ||
-      shouldApplyFrameClip(
-        getRenderElementWithPositionOverride(element, renderState.offset),
-        frame,
-        appState,
-        elementsMap,
-        inFrameGroupsMap,
-      )
-    ) {
-      frameClip(frame, context, renderConfig, appState);
-    }
-  };
+  ) =>
+    clipElementToItsFrame(element, renderState, {
+      context,
+      renderConfig,
+      appState,
+      elementsMap,
+      getRenderState,
+      inFrameGroupsMap,
+    });
 
   // Paint visible elements
   visibleElements
@@ -421,6 +457,20 @@ const _renderStaticScene = ({
           appState,
           renderState,
         );
+
+        // in the editor, the googly eyes have their own layer
+        // (GooglyEyesCanvas) where the pupils follow the pointer
+        if (isExporting && hasGooglyEyes(element)) {
+          context.save();
+          context.translate(appState.scrollX, appState.scrollY);
+          drawGooglyEyes(
+            context,
+            getGooglyEyes(element, elementsMap, renderState.offset),
+            null,
+            renderState.opacity,
+          );
+          context.restore();
+        }
 
         if (boundTextElement) {
           renderElement(
