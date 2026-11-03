@@ -132,6 +132,10 @@
     "distributeVertically": "Distribute vertically",
     "flipHorizontal": "Flip horizontal",
     "flipVertical": "Flip vertical",
+    "googlyEyes": {
+      "add": "Add googly eyes",
+      "remove": "Remove googly eyes"
+    },
     "viewMode": "View mode",
     "share": "Share",
     "showStroke": "Show stroke color picker",

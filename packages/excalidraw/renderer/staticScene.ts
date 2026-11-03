@@ -42,6 +42,7 @@ import {
   getLinkHandleFromCoords,
 } from "../components/hyperlink/helpers";
 
+import { drawGooglyEyes, getGooglyEyes, hasGooglyEyes } from "./googlyEyes";
 import {
   bootstrapCanvas,
   getNormalizedCanvasDimensions,
@@ -421,6 +422,20 @@ const _renderStaticScene = ({
           appState,
           renderState,
         );
+
+        // in the editor, the googly eyes have their own layer
+        // (GooglyEyesCanvas) where the pupils follow the pointer
+        if (isExporting && hasGooglyEyes(element)) {
+          context.save();
+          context.translate(appState.scrollX, appState.scrollY);
+          drawGooglyEyes(
+            context,
+            getGooglyEyes(element, elementsMap, renderState.offset),
+            null,
+            renderState.opacity,
+          );
+          context.restore();
+        }
 
         if (boundTextElement) {
           renderElement(

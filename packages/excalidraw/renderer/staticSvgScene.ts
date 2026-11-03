@@ -52,6 +52,12 @@ import type {
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
 
+import {
+  getGooglyEyes,
+  hasGooglyEyes,
+  renderGooglyEyesToSvg,
+} from "./googlyEyes";
+
 import type { RenderableElementsMap, SVGRenderConfig } from "../scene/types";
 import type { AppState, BinaryFiles } from "../types";
 import type { Drawable } from "roughjs/bin/core";
@@ -847,6 +853,34 @@ const renderElementToSvg = (
   }
 };
 
+/** Exports draw the eyes above the element (below its label), pupils centered. */
+const renderGooglyEyesOfElementToSvg = (
+  element: Readonly<NonDeletedExcalidrawElement>,
+  elementsMap: RenderableElementsMap,
+  svgRoot: SVGElement,
+  renderConfig: SVGRenderConfig,
+) => {
+  const opacity =
+    ((getContainingFrame(element, elementsMap)?.opacity ?? 100) *
+      element.opacity) /
+    10000;
+  const eyes = renderGooglyEyesToSvg(
+    svgRoot.ownerDocument,
+    getGooglyEyes(element, elementsMap),
+    renderConfig.offsetX,
+    renderConfig.offsetY,
+    opacity,
+  );
+  const clipped = maybeWrapNodesInFrameClipPath(
+    element,
+    svgRoot,
+    [eyes],
+    renderConfig.frameRendering,
+    elementsMap,
+  );
+  svgRoot.appendChild(clipped || eyes);
+};
+
 export const renderSceneToSvg = (
   elements: readonly NonDeletedExcalidrawElement[],
   elementsMap: RenderableElementsMap,
@@ -884,6 +918,15 @@ export const renderSceneToSvg = (
             element.y + renderConfig.offsetY,
             renderConfig,
           );
+
+          if (hasGooglyEyes(element)) {
+            renderGooglyEyesOfElementToSvg(
+              element,
+              elementsMap,
+              svgRoot,
+              renderConfig,
+            );
+          }
 
           const boundTextElement = getBoundTextElement(element, elementsMap);
           if (boundTextElement?.isDeleted === false) {

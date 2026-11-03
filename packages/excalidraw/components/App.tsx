@@ -287,6 +287,7 @@ import {
   actionFinalize,
   actionFlipHorizontal,
   actionFlipVertical,
+  actionToggleGooglyEyes,
   actionGroup,
   actionPasteStyles,
   actionSelectAll,
@@ -401,6 +402,8 @@ import {
   resolveColorTarget,
 } from "../actions/colorTargets";
 
+import { GooglyEyesAnimator } from "../renderer/googlyEyesScene";
+
 import ConvertElementTypePopup, {
   getConversionTypeFromElements,
   convertElementTypePopupAtom,
@@ -435,6 +438,7 @@ import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
 import { hideTooltip } from "./Tooltip";
 import { StaticCanvas, InteractiveCanvas } from "./canvases";
 import NewElementCanvas from "./canvases/NewElementCanvas";
+import GooglyEyesCanvas from "./canvases/GooglyEyesCanvas";
 import { isPointHittingLink } from "./hyperlink/helpers";
 import { CursorHint, CursorHints } from "./CursorHint";
 import { MagicIcon, copyIcon, fullscreenIcon } from "./icons";
@@ -449,6 +453,7 @@ import type { ExcalidrawLibraryIds } from "../data/types";
 import type {
   RenderInteractiveSceneCallback,
   ScrollBars,
+  StaticCanvasRenderConfig,
 } from "../scene/types";
 
 import type { ExportedElements } from "../data";
@@ -729,6 +734,8 @@ class App extends React.Component<AppProps, AppState> {
   previousPointerMoveCoords: { x: number; y: number } | null = null;
 
   drawShape = new AppDrawShape(this);
+  /** this user's googly eyes: pupils follow the local pointer, never synced */
+  googlyEyes = new GooglyEyesAnimator();
   laserTrails = new LaserTrails(this);
   eraserTrail = new EraserTrail(this);
   lassoTrail = new LassoTrail(this);
@@ -2339,6 +2346,28 @@ class App extends React.Component<AppProps, AppState> {
 
     const allElementsMap = this.scene.getNonDeletedElementsMap();
 
+    const staticVisibleElements = this.elementRenderOffsets.size
+      ? this.renderer.getVisibleElementsWithRenderOffsets(
+          visibleElements,
+          renderableElementsMap,
+          this.state,
+          this.elementRenderOffsets,
+        )
+      : visibleElements;
+
+    const staticRenderConfig: StaticCanvasRenderConfig = {
+      imageCache: this.imageCache,
+      isExporting: false,
+      renderGrid: isGridModeEnabled(this),
+      renderLinks: this.isLinksEnabled(),
+      canvasBackgroundColor: this.state.viewBackgroundColor,
+      embedsValidationStatus: this.embedsValidationStatus,
+      elementsPendingErasure: this.elementsPendingErasure,
+      pendingFlowchartNodes: this.flowchart.pendingNodes,
+      theme: this.state.theme,
+      ...this.getRenderOverrideConfig(),
+    };
+
     // a tool dragged out of the toolbar previews on the new-element canvas
     // (it is not in the scene until dropped)
     const previewElement = newElementCanvasElement ?? this.toolDrag.preview;
@@ -2604,38 +2633,25 @@ class App extends React.Component<AppProps, AppState> {
                             rc={this.rc}
                             elementsMap={renderableElementsMap}
                             allElementsMap={allElementsMap}
-                            visibleElements={
-                              this.elementRenderOffsets.size
-                                ? this.renderer.getVisibleElementsWithRenderOffsets(
-                                    visibleElements,
-                                    renderableElementsMap,
-                                    this.state,
-                                    this.elementRenderOffsets,
-                                  )
-                                : visibleElements
-                            }
+                            visibleElements={staticVisibleElements}
                             canvasNonce={canvasNonce}
                             selectionNonce={
                               this.state.selectionElement?.versionNonce
                             }
                             scale={this.ownerWindow.devicePixelRatio}
                             appState={this.state}
-                            renderConfig={{
-                              imageCache: this.imageCache,
-                              isExporting: false,
-                              renderGrid: isGridModeEnabled(this),
-                              renderLinks: this.isLinksEnabled(),
-                              canvasBackgroundColor:
-                                this.state.viewBackgroundColor,
-                              embedsValidationStatus:
-                                this.embedsValidationStatus,
-                              elementsPendingErasure:
-                                this.elementsPendingErasure,
-                              pendingFlowchartNodes:
-                                this.flowchart.pendingNodes,
-                              theme: this.state.theme,
-                              ...this.getRenderOverrideConfig(),
-                            }}
+                            renderConfig={staticRenderConfig}
+                          />
+                          <GooglyEyesCanvas
+                            animator={this.googlyEyes}
+                            rc={this.rc}
+                            elementsMap={renderableElementsMap}
+                            allElementsMap={allElementsMap}
+                            visibleElements={staticVisibleElements}
+                            canvasNonce={canvasNonce}
+                            scale={this.ownerWindow.devicePixelRatio}
+                            appState={this.state}
+                            renderConfig={staticRenderConfig}
                           />
                           {previewElement && (
                             <NewElementCanvas
@@ -3873,6 +3889,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   public componentWillUnmount() {
+    this.googlyEyes.destroy();
     // we're recreating the api object reference so that the
     // <ExcalidrawAPIContext.Provider/> picks up on it
     this.api = { ...this.api, isDestroyed: true };
@@ -6802,6 +6819,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerMove = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
+    this.googlyEyes.setPointer(event.clientX, event.clientY);
     if (!this.isInteractionEnabled()) {
       if (this.isToolSupported(this.state.activeTool.type)) {
         // keep broadcasting the pointer (`props.onPointerUpdate`) between
@@ -7523,6 +7541,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerDown = (
     event: React.PointerEvent<HTMLElement>,
   ) => {
+    this.googlyEyes.setPointer(event.clientX, event.clientY);
     if (
       !this.isInteractionEnabled() &&
       !this.isToolSupported(this.state.activeTool.type)
@@ -12765,6 +12784,8 @@ class App extends React.Component<AppProps, AppState> {
       CONTEXT_MENU_SEPARATOR,
       actionFlipHorizontal,
       actionFlipVertical,
+      CONTEXT_MENU_SEPARATOR,
+      actionToggleGooglyEyes,
       CONTEXT_MENU_SEPARATOR,
       actionToggleLinearEditor,
       CONTEXT_MENU_SEPARATOR,

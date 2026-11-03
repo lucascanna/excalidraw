@@ -123,7 +123,8 @@ body.excalidraw-cursor-resize * {
   }
 
   &__canvas-wrapper,
-  &__canvas.static {
+  &__canvas.static,
+  &__canvas.googly-eyes {
     pointer-events: none;
   }
 
