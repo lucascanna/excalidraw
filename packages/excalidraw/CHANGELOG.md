@@ -13,6 +13,12 @@ Please add the latest change on the top under the correct section.
 
 ## Unreleased
 
+### Googly eyes (2026-11-03) [#XXXX](https://github.com/excalidraw/excalidraw/pull/XXXX)
+
+- New element context menu item "Add googly eyes" (action `toggleGooglyEyes`, in its own group after Flip): puts two googly eyes on each selected rectangle, diamond, ellipse, freedraw or image. It reads "Remove googly eyes" when every eligible selected element already has eyes. Not in view mode or the canvas menu.
+- The flag is stored as `element.customData.googlyEyes: true`, so it syncs, saves, copies, duplicates and goes to the library with the element.
+- In the editor the pupils follow the local pointer (never synced), drawn on a new overlay canvas (`canvas.excalidraw__canvas.googly-eyes`) between the static and interactive canvases; a pointer move repaints only that canvas. PNG and SVG exports draw the eyes with centered pupils.
+
 ### Wheel navigation (2026-09-13) [#XXXX](https://github.com/excalidraw/excalidraw/pull/XXXX)
 
 - Scrolling while holding the wheel (middle) mouse button zooms the canvas around the pointer, the same as ctrl/cmd+wheel — a wheel-button pan can be zoomed one-handed, without reaching for a modifier.

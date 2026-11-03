@@ -146,8 +146,26 @@ export const clampPupilOffset = (
   offset: PupilOffset,
 ): PupilOffset => {
   const distance = Math.hypot(offset.x, offset.y);
-  if (distance <= eye.travel || !(distance > 0)) {
-    return distance > 0 ? offset : CENTERED_PUPIL;
+  if (distance === Infinity) {
+    // point along the infinite axes, at full travel
+    const axis = (value: number) =>
+      value === Infinity ? 1 : value === -Infinity ? -1 : 0;
+    let x = axis(offset.x);
+    let y = axis(offset.y);
+    if (!x && !y) {
+      // two huge finite values whose length overflows
+      x = Math.sign(offset.x);
+      y = Math.sign(offset.y);
+    }
+    const ratio = eye.travel / Math.hypot(x, y);
+    return { x: x * ratio, y: y * ratio };
+  }
+  // NaN or zero
+  if (!(distance > 0)) {
+    return CENTERED_PUPIL;
+  }
+  if (distance <= eye.travel) {
+    return offset;
   }
   const ratio = eye.travel / distance;
   return { x: offset.x * ratio, y: offset.y * ratio };
