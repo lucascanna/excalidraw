@@ -19,6 +19,8 @@ type IconButtonBaseProps = {
   icon?: React.ReactNode;
   "aria-label": string;
   "aria-keyshortcuts"?: string;
+  "aria-haspopup"?: React.AriaAttributes["aria-haspopup"];
+  "aria-expanded"?: boolean;
   "data-testid"?: string;
   label?: string;
   title?: string;
@@ -168,6 +170,8 @@ export const IconButton = React.forwardRef(
         title={props.title}
         aria-label={props["aria-label"]}
         aria-keyshortcuts={props["aria-keyshortcuts"]}
+        aria-haspopup={props["aria-haspopup"]}
+        aria-expanded={props["aria-expanded"]}
         aria-pressed={props.checked}
         data-testid={props["data-testid"]}
         disabled={!!props.disabled}

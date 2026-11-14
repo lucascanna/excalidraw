@@ -18,6 +18,17 @@ interface PropertiesPopoverProps {
   onFocusOutside?: Popover.PopoverContentProps["onFocusOutside"];
   onPointerDownOutside?: Popover.PopoverContentProps["onPointerDownOutside"];
   preventAutoFocusOnTouch?: boolean;
+  /**
+   * placement against the trigger (or anchor); by default to its right, or
+   * below it on a portrait phone
+   */
+  side?: Popover.PopoverContentProps["side"];
+  align?: Popover.PopoverContentProps["align"];
+  sideOffset?: number;
+  alignOffset?: number;
+  /** @default true */
+  arrow?: boolean;
+  "aria-label"?: string;
 }
 
 export const PropertiesPopover = React.forwardRef<
@@ -36,6 +47,12 @@ export const PropertiesPopover = React.forwardRef<
       onPointerLeave,
       onPointerDownOutside,
       preventAutoFocusOnTouch = false,
+      side,
+      align,
+      sideOffset = 20,
+      alignOffset = -16,
+      arrow = true,
+      "aria-label": ariaLabel,
     },
     ref,
   ) => {
@@ -49,15 +66,19 @@ export const PropertiesPopover = React.forwardRef<
           ref={ref}
           className={clsx("focus-visible-none", className)}
           data-prevent-outside-click
-          side={isMobilePortrait ? "bottom" : "right"}
-          align={isMobilePortrait ? "center" : "start"}
-          alignOffset={-16}
-          sideOffset={20}
+          aria-label={ariaLabel}
+          side={side ?? (isMobilePortrait ? "bottom" : "right")}
+          align={align ?? (isMobilePortrait ? "center" : "start")}
+          alignOffset={alignOffset}
+          sideOffset={sideOffset}
           collisionBoundary={container ?? undefined}
           style={{
             zIndex: "var(--zIndex-ui-styles-popup)",
             marginLeft:
-              editorInterface.formFactor === "phone" ? "0.5rem" : undefined,
+              // offsets the default right-of-trigger placement on phones
+              side === undefined && editorInterface.formFactor === "phone"
+                ? "0.5rem"
+                : undefined,
           }}
           onPointerLeave={onPointerLeave}
           onKeyDown={onKeyDown}
@@ -87,14 +108,16 @@ export const PropertiesPopover = React.forwardRef<
           <Island padding={3} style={style}>
             {children}
           </Island>
-          <Popover.Arrow
-            width={20}
-            height={10}
-            style={{
-              fill: "var(--popup-bg-color)",
-              filter: "drop-shadow(rgba(0, 0, 0, 0.05) 0px 3px 2px)",
-            }}
-          />
+          {arrow && (
+            <Popover.Arrow
+              width={20}
+              height={10}
+              style={{
+                fill: "var(--popup-bg-color)",
+                filter: "drop-shadow(rgba(0, 0, 0, 0.05) 0px 3px 2px)",
+              }}
+            />
+          )}
         </Popover.Content>
       </Popover.Portal>
     );

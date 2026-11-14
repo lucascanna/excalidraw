@@ -134,6 +134,7 @@ import {
   isBoundToContainer,
   isFrameLikeElement,
   isImageElement,
+  isEmojiStampElement,
   isEmbeddableElement,
   isInitializedImageElement,
   isLinearElement,
@@ -413,6 +414,7 @@ import { AppClipboard } from "./App.clipboard";
 import { AppText } from "./App.text";
 import { AppTextTool } from "./App.textTool";
 import { AppBucketFill } from "./App.bucketFill";
+import { AppEmojiStamp } from "./App.emojiStamp";
 import { AppToolDrag, TOOL_DRAG_PREVIEW_OPACITY } from "./App.toolDrag";
 import { AppCursor } from "./App.cursor";
 import { AppDrawShape } from "./App.drawshape";
@@ -679,6 +681,7 @@ class App extends React.Component<AppProps, AppState> {
   public onStateChange: OnStateChange = this.appStateObserver.onStateChange;
 
   public bucketFill: AppBucketFill = new AppBucketFill(this);
+  public emojiStamp: AppEmojiStamp = new AppEmojiStamp(this);
   public duplicate: AppDuplicate = new AppDuplicate(this);
   public toolDrag: AppToolDrag = new AppToolDrag(this);
   public flowchart: AppFlowchart = new AppFlowchart(this);
@@ -4351,6 +4354,12 @@ class App extends React.Component<AppProps, AppState> {
     ) {
       this.cursor.applyForTool();
     }
+    if (
+      this.state.activeTool.type === TOOL_TYPE.emoji &&
+      prevState.currentItemEmoji !== this.state.currentItemEmoji
+    ) {
+      this.cursor.applyForTool();
+    }
 
     // Hide hyperlink popup if shown when element type is not selection
     if (
@@ -4711,6 +4720,7 @@ class App extends React.Component<AppProps, AppState> {
       // the gesture has queued, and with the click still pending that move
       // would resolve it as a drag.
       this.bucketFill.cancel();
+      this.emojiStamp.cancel();
       this.textTool.cancel();
     }
 
@@ -5142,6 +5152,7 @@ class App extends React.Component<AppProps, AppState> {
         if (
           selectedElements.length === 1 &&
           isImageElement(selectedElements[0]) &&
+          !isEmojiStampElement(selectedElements[0]) &&
           event.key === KEYS.ENTER
         ) {
           this.startImageCropping(selectedElements[0]);
@@ -5339,6 +5350,12 @@ class App extends React.Component<AppProps, AppState> {
             });
           } else {
             this.setActiveTool({ type: shape }, { toggle: true });
+          }
+
+          if (shape === TOOL_TYPE.emoji) {
+            // the emoji picker focuses its search field: don't type the
+            // shortcut's letter into it
+            event.preventDefault();
           }
 
           event.stopPropagation();
@@ -5727,6 +5744,12 @@ class App extends React.Component<AppProps, AppState> {
        * activation can switch back to it).
        */
       toggle?: boolean;
+      /**
+       * Internal: the emoji was just picked in the emoji picker. Otherwise
+       * activating the emoji tool only opens the picker (as the image tool
+       * opens the file dialog): the tool arms once an emoji is picked.
+       */
+      emojiPicked?: boolean;
     } = {},
   ) => {
     const { keepSelection = false } = opts;
@@ -5747,6 +5770,15 @@ class App extends React.Component<AppProps, AppState> {
       console.warn(
         `"${tool.type}" tool activation ignored — the active tool is controlled by the host via "props.activeTool"`,
       );
+      return;
+    }
+
+    if (tool.type === TOOL_TYPE.emoji && !opts.emojiPicked) {
+      if (opts.toggle) {
+        this.emojiStamp.togglePicker();
+      } else {
+        this.emojiStamp.openPicker();
+      }
       return;
     }
 
@@ -6303,7 +6335,12 @@ class App extends React.Component<AppProps, AppState> {
       }
     }
 
-    if (selectedElements.length === 1 && isImageElement(selectedElements[0])) {
+    if (
+      selectedElements.length === 1 &&
+      isImageElement(selectedElements[0]) &&
+      // an emoji stamp is not cropped
+      !isEmojiStampElement(selectedElements[0])
+    ) {
       this.startImageCropping(selectedElements[0]);
       return;
     }
@@ -7609,6 +7646,13 @@ class App extends React.Component<AppProps, AppState> {
       this.setAppState({ snapLines: [] });
     }
 
+    if (this.emojiStamp.isPickerOpen()) {
+      // a press outside the emoji picker only dismisses it: it neither
+      // stamps nor changes the selection or the tool
+      this.setState({ openPopup: null });
+      return;
+    }
+
     if (this.state.openPopup) {
       this.setState({ openPopup: null });
     }
@@ -7977,6 +8021,10 @@ class App extends React.Component<AppProps, AppState> {
       // mode this branch is unreachable:
       // `pan.start` swallows the pointer-down.
       this.bucketFill.handlePointerDown(scenePointer);
+    } else if (this.state.activeTool.type === TOOL_TYPE.emoji) {
+      // one-shot click tool like bucket fill: armed on pointer down,
+      // stamped in the shared pointer-up teardown
+      this.emojiStamp.handlePointerDown(scenePointer);
     } else if (
       this.state.activeTool.type !== "eraser" &&
       this.state.activeTool.type !== "hand" &&
@@ -10372,6 +10420,15 @@ class App extends React.Component<AppProps, AppState> {
       } else {
         this.bucketFill.cancel();
       }
+      // an armed emoji stamp commits likewise only on a genuine pointer up
+      if (
+        childEvent.type === "pointerup" &&
+        this.state.activeTool.type === TOOL_TYPE.emoji
+      ) {
+        this.emojiStamp.handlePointerUp();
+      } else {
+        this.emojiStamp.cancel();
+      }
       const {
         newElement,
         resizingElement,
@@ -12240,8 +12297,9 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     // a context menu during a press (touch long-press) means the user is
-    // not committing a bucket click
+    // not committing a bucket click or an emoji stamp
     this.bucketFill.cancel();
+    this.emojiStamp.cancel();
 
     if (
       (pointer.pointerType === "touch" ||

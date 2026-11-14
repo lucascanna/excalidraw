@@ -1390,7 +1390,9 @@ describe("tool locking & selection", () => {
         value !== "frame" &&
         value !== "embeddable" &&
         value !== "autoshape" &&
-        value !== "bucketfill"
+        value !== "bucketfill" &&
+        // opens its picker first, and stamps on click (see emojiTool.test.tsx)
+        value !== "emoji"
       ) {
         const element = UI.createElement(value);
         expect(h.state.selectedElementIds[element.id]).not.toBe(true);

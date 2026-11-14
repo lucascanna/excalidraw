@@ -29,6 +29,7 @@ import {
   ArrowToolButton,
   DiamondToolButton,
   EllipseToolButton,
+  EmojiToolButton,
   EraserToolButton,
   FreedrawToolPopover,
   FreedrawToolButton,
@@ -307,6 +308,7 @@ export const Toolbar = ({
         )}
         <TextToolButton {...toolProps} />
         <StickyNoteToolButton {...toolProps} />
+        <EmojiToolButton {...toolProps} />
         <EraserToolButton {...toolProps} />
 
         <div
