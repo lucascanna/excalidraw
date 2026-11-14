@@ -841,3 +841,146 @@ describe("emoji on phones", () => {
     },
   );
 });
+
+// Regressions for the review fixes: keep the asynchronous file path real.
+describe("emoji review regressions", () => {
+  beforeEach(async () => {
+    await render(
+      <Excalidraw
+        handleKeyboardGlobally
+        generateIdForFile={generateIdForFile}
+      />,
+    );
+  });
+
+  it.each([false, true])(
+    "a late picture completes only its original placeholder (scene replaced: %s)",
+    async (replaceScene) => {
+      let resolveFile!: (id: FileId) => void;
+      const fileId = "late-emoji-png" as FileId;
+      const pendingFile = new Promise<FileId>((resolve) => {
+        resolveFile = resolve;
+      });
+      generateIdForFile.mockImplementationOnce(() => pendingFile);
+
+      // Deliberately do not use pick(), which waits for the file to be ready.
+      act(() => h.app.emojiStamp.pick(emoji));
+      mouse.clickAt(200, 200);
+      expect(liveElements()).toHaveLength(1);
+      const placeholderId = stamp().id;
+      expect(stamp()).toMatchObject({
+        type: "image",
+        customData: { emoji },
+        fileId: null,
+        x: 160,
+        y: 160,
+        width: 80,
+        height: 80,
+      });
+      expect(h.state.selectedElementIds).toEqual({ [placeholderId]: true });
+
+      if (replaceScene) {
+        API.updateScene({ elements: [] });
+        expect(liveElements()).toHaveLength(0);
+      }
+
+      await act(async () => {
+        resolveFile(fileId);
+        await h.app.emojiStamp.prepareFile(emoji);
+      });
+
+      if (replaceScene) {
+        expect(h.elements).toEqual([]);
+        expect(h.app.files[fileId]).toBeUndefined();
+      } else {
+        await waitFor(() => expect(stamp().fileId).toBe(fileId));
+        expect(liveElements()).toHaveLength(1);
+        expect(stamp()).toMatchObject({
+          id: placeholderId,
+          customData: { emoji },
+          x: 160,
+          y: 160,
+          width: 80,
+          height: 80,
+        });
+        expect(h.state.selectedElementIds).toEqual({ [placeholderId]: true });
+        expect(h.app.files[fileId]).toMatchObject({
+          id: fileId,
+          mimeType: MIME_TYPES.png,
+        });
+        Keyboard.undo();
+        expect(liveElements()).toHaveLength(0);
+      }
+    },
+  );
+
+  it("preserves the API's requested lock when a pick arms the tool", async () => {
+    expect(h.state.activeTool.locked).toBe(false);
+    act(() => h.app.setActiveTool({ type: "emoji", locked: true }));
+    expect(h.state.openPopup).toBe("emojiPicker");
+    expect(h.state.activeTool.type).toBe("selection");
+
+    await pick();
+    expect(h.state.activeTool.locked).toBe(true);
+    expect(h.state.activeTool.type).toBe("emoji");
+    expect(h.state.openPopup).toBeNull();
+    mouse.clickAt(200, 200);
+    mouse.clickAt(400, 200);
+    expect(liveElements()).toHaveLength(2);
+    expect(liveElements()).toEqual([
+      expect.objectContaining({ type: "image", x: 160, customData: { emoji } }),
+      expect.objectContaining({ type: "image", x: 360, customData: { emoji } }),
+    ]);
+    expect(h.state.selectedElementIds).toEqual({});
+    expect(h.state.activeTool).toMatchObject({ type: "emoji", locked: true });
+  });
+
+  it("finds capitalized emoji names with a lowercase search", async () => {
+    const input = await openPicker();
+    fireEvent.change(input, { target: { value: "italy" } });
+    expect(
+      await screen.findByRole("button", { name: "Flag: Italy" }),
+    ).toHaveAttribute("data-testid", "emoji-picker-🇮🇹");
+    expect(screen.queryByText("No emoji found")).not.toBeInTheDocument();
+  });
+
+  it("guards a button pointerdown from another realm, then toggles closed on click", async () => {
+    await openPicker();
+    // Radix installs its document pointerdown listener on the next timer tick.
+    await act(async () => {
+      await new Promise<void>((resolve) =>
+        h.app.ownerWindow.setTimeout(resolve, 0),
+      );
+    });
+    const button = screen.getByTestId("toolbar-emoji");
+    const iframe = h.app.ownerDocument.createElement("iframe");
+    h.app.ownerDocument.body.appendChild(iframe);
+    const target = iframe.contentDocument!.createElement("span");
+    // Adopting a foreign node preserves its realm's prototype while letting
+    // real DOM events bubble through the mounted toolbar and Radix listener.
+    button.appendChild(target);
+    try {
+      expect(target instanceof h.app.ownerWindow.Element).toBe(false);
+      expect(target.closest("[data-testid='toolbar-emoji']")).toBe(button);
+      fireEvent.pointerDown(target, {
+        button: 0,
+        pointerType: "mouse",
+        pointerId: 1,
+      });
+      expect(h.state.openPopup).toBe("emojiPicker");
+      expect(screen.getByTestId("emoji-picker")).toBeInTheDocument();
+      fireEvent.pointerUp(target, {
+        button: 0,
+        pointerType: "mouse",
+        pointerId: 1,
+      });
+      fireEvent.click(target);
+      expect(h.state.openPopup).toBeNull();
+      expect(screen.queryByTestId("emoji-picker")).not.toBeInTheDocument();
+      expect(h.state.activeTool.type).toBe("selection");
+    } finally {
+      target.remove();
+      iframe.remove();
+    }
+  });
+});
