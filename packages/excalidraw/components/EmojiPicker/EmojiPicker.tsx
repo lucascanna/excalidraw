@@ -27,6 +27,8 @@ type PickerGroup = {
   emoji: readonly EmojiEntry[];
 };
 
+const noop = () => {};
+
 /**
  * the Emoji button toggles the picker itself: pressing or focusing it must
  * not also dismiss the picker as an outside interaction
@@ -252,7 +254,10 @@ export const EmojiPicker = ({
       alignOffset={0}
       arrow={placement === "toolbar"}
       aria-label={t("emojiPicker.title")}
-      onClose={onClose}
+      // every close goes through the popover root's `onOpenChange`, Escape
+      // or a pick. This callback runs once the old content unmounts, so it
+      // must not close a picker reopened in the meantime
+      onClose={noop}
       onKeyDown={onKeyDown}
       onPointerDownOutside={(event) => {
         if (isEmojiToolButton(event.target)) {
