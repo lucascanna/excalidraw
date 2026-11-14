@@ -12,7 +12,7 @@ import { Excalidraw } from "../index";
 import { findShapeByKey } from "../components/Tools";
 
 import { API } from "./helpers/api";
-import { Pointer } from "./helpers/ui";
+import { Keyboard, Pointer } from "./helpers/ui";
 import { act, fireEvent, GlobalTestState, render } from "./test-utils";
 
 import type { AppClassProperties, ExcalidrawImperativeAPI } from "../types";
@@ -98,6 +98,13 @@ describe("findShapeByKey()", () => {
 
     expect(findShapeByKey("v", app)).toBe("lasso");
     expect(findShapeByKey("1", app)).toBe("lasso");
+  });
+
+  it("J resolves to emoji, including CapsLock but not Shift+J", () => {
+    const app = appWithPreferredTool("selection");
+    expect(findShapeByKey("j", app)).toBe("emoji");
+    expect(findShapeByKey("J", app)).toBe("emoji");
+    expect(findShapeByKey("J", app, true)).toBeNull();
   });
 
   it("letter shortcuts are CapsLock-insensitive", () => {
@@ -384,5 +391,49 @@ describe("toolbar", () => {
     expect(badge("text")).toBe("T");
     expect(badge("stickynote")).toBe("N");
     expect(badge("eraser")).toBe("E");
+    expect(badge("emoji")).toBe("J");
+  });
+});
+
+describe("emoji shortcut", () => {
+  beforeAll(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterAll(() => vi.unstubAllGlobals());
+
+  it("J toggles the picker without arming a tool or typing into search", async () => {
+    await render(<Excalidraw handleKeyboardGlobally />);
+    const { h } = window;
+    act(() => h.app.setActiveTool({ type: "rectangle" }));
+    Keyboard.keyPress("j", h.app.ownerDocument);
+    expect(h.state.openPopup).toBe("emojiPicker");
+    expect(h.state.activeTool.type).toBe("rectangle");
+    expect(
+      GlobalTestState.renderResult.getByPlaceholderText("Search emoji"),
+    ).toHaveValue("");
+    // A canvas shortcut (search itself owns printable keys).
+    Keyboard.keyPress("j", h.app.ownerDocument);
+    expect(h.state.openPopup).toBeNull();
+    expect(h.state.activeTool.type).toBe("rectangle");
+  });
+
+  it("setActiveTool only opens the picker, and toggle explicitly closes it", async () => {
+    await render(<Excalidraw />);
+    const { h } = window;
+    act(() => h.app.setActiveTool({ type: "emoji" }));
+    expect(h.state.openPopup).toBe("emojiPicker");
+    expect(h.state.activeTool.type).toBe("selection");
+    act(() => h.app.setActiveTool({ type: "emoji" }));
+    expect(h.state.openPopup).toBe("emojiPicker");
+    act(() => h.app.setActiveTool({ type: "emoji" }, { toggle: true }));
+    expect(h.state.openPopup).toBeNull();
+    expect(h.state.currentItemEmoji).toBeNull();
   });
 });
