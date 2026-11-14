@@ -164,7 +164,8 @@ export type ToolType =
   | "embeddable"
   | "laser"
   | "autoshape"
-  | "bucketfill";
+  | "bucketfill"
+  | "emoji";
 
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
@@ -462,6 +463,10 @@ export interface AppState {
   currentHoveredFontFamily: FontFamilyValues | null;
   currentItemRoundness: StrokeRoundness;
   currentItemArrowType: "sharp" | "round" | "elbow";
+  /** the emoji the emoji tool stamps, picked in the emoji picker */
+  currentItemEmoji: string | null;
+  /** emoji picked in the emoji picker, most recent first */
+  recentEmojis: readonly string[];
   viewBackgroundColor: string;
   scrollX: number;
   scrollY: number;
@@ -482,6 +487,7 @@ export interface AppState {
     | "compactStrokeStyles"
     | "compactOtherProperties"
     | "compactArrowProperties"
+    | "emojiPicker"
     | null;
   openSidebar: { name: SidebarName; tab?: SidebarTabName } | null;
   openDialog:
@@ -1219,6 +1225,7 @@ export type AppClassProperties = {
   textTool: App["textTool"];
   cursor: App["cursor"];
   bucketFill: App["bucketFill"];
+  emojiStamp: App["emojiStamp"];
   duplicate: App["duplicate"];
   toolDrag: App["toolDrag"];
   activeResizeHandle: App["activeResizeHandle"];

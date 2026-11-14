@@ -10,6 +10,7 @@ import { useTunnels } from "../context/tunnels";
 import DropdownMenu from "./dropdownMenu/DropdownMenu";
 import { ToolPopover } from "./ToolPopover";
 import {
+  EmojiToolButton,
   EraserToolButton,
   FrameToolButton,
   FreedrawToolPopover,
@@ -34,6 +35,7 @@ import {
   mermaidLogoIcon,
   MagicIcon,
   stickyNoteToolIcon,
+  emojiToolIcon,
 } from "./icons";
 
 import "./ToolIcon.scss";
@@ -109,12 +111,15 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
   const MIN_WIDTH = MIN_TOOLS * WIDTH + (MIN_TOOLS - 1) * GAP;
   const ADDITIONAL_WIDTH = WIDTH + GAP;
 
-  const showTextToolOutside = toolbarWidth >= MIN_WIDTH + 1 * ADDITIONAL_WIDTH;
-  const showImageToolOutside = toolbarWidth >= MIN_WIDTH + 2 * ADDITIONAL_WIDTH;
-  const showFrameToolOutside = toolbarWidth >= MIN_WIDTH + 3 * ADDITIONAL_WIDTH;
+  // the optional tools take the free slots in this order
+  const showEmojiToolOutside = toolbarWidth >= MIN_WIDTH + 1 * ADDITIONAL_WIDTH;
+  const showTextToolOutside = toolbarWidth >= MIN_WIDTH + 2 * ADDITIONAL_WIDTH;
+  const showImageToolOutside = toolbarWidth >= MIN_WIDTH + 3 * ADDITIONAL_WIDTH;
+  const showFrameToolOutside = toolbarWidth >= MIN_WIDTH + 4 * ADDITIONAL_WIDTH;
 
   const extraTools: readonly typeof activeTool.type[] = (
     [
+      "emoji",
       "text",
       "stickynote",
       "frame",
@@ -124,6 +129,9 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
       "magicframe",
     ] as const
   ).filter((tool) => {
+    if (showEmojiToolOutside && tool === "emoji") {
+      return false;
+    }
     if (showTextToolOutside && tool === "text") {
       return false;
     }
@@ -133,25 +141,38 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
     return true;
   });
   const extraToolSelected = extraTools.includes(activeTool.type);
-  const extraIcon = extraToolSelected
-    ? activeTool.type === "text"
-      ? TextIcon
-      : activeTool.type === "image"
-      ? ImageIcon
-      : activeTool.type === "frame"
-      ? frameToolIcon
-      : activeTool.type === "stickynote"
-      ? stickyNoteToolIcon
-      : activeTool.type === "embeddable"
-      ? EmbedIcon
-      : activeTool.type === "laser"
-      ? laserPointerToolIcon
-      : activeTool.type === "bucketfill"
-      ? bucketFillIcon
-      : activeTool.type === "magicframe"
-      ? MagicIcon
-      : DotsIcon
-    : DotsIcon;
+  const extraIcon = extraToolSelected ? (
+    activeTool.type === "emoji" ? (
+      app.state.currentItemEmoji ? (
+        // the picked emoji, as on the Emoji button
+        <span className="emoji-tool-glyph" aria-hidden="true">
+          {app.state.currentItemEmoji}
+        </span>
+      ) : (
+        emojiToolIcon
+      )
+    ) : activeTool.type === "text" ? (
+      TextIcon
+    ) : activeTool.type === "image" ? (
+      ImageIcon
+    ) : activeTool.type === "frame" ? (
+      frameToolIcon
+    ) : activeTool.type === "stickynote" ? (
+      stickyNoteToolIcon
+    ) : activeTool.type === "embeddable" ? (
+      EmbedIcon
+    ) : activeTool.type === "laser" ? (
+      laserPointerToolIcon
+    ) : activeTool.type === "bucketfill" ? (
+      bucketFillIcon
+    ) : activeTool.type === "magicframe" ? (
+      MagicIcon
+    ) : (
+      DotsIcon
+    )
+  ) : (
+    DotsIcon
+  );
 
   const toolProps = { app, activeTool };
 
@@ -219,6 +240,11 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
         }
       />
 
+      {/* Emoji Tool (its picker opens above the bottom bar, see MobileMenu) */}
+      {showEmojiToolOutside && (
+        <EmojiToolButton {...toolProps} hideShortcut withPicker={false} />
+      )}
+
       {/* Text Tool */}
       {showTextToolOutside && <TextToolButton {...toolProps} hideShortcut />}
 
@@ -269,6 +295,19 @@ export const MobileToolbar = ({ app, setAppState }: MobileToolbarProps) => {
               disabled={isToolButtonDisabled(app, "text")}
             >
               {t("toolBar.text")}
+            </DropdownMenu.Item>
+          )}
+
+          {!showEmojiToolOutside && (
+            <DropdownMenu.Item
+              // opens the emoji picker
+              onSelect={() => app.setActiveTool({ type: "emoji" })}
+              icon={emojiToolIcon}
+              data-testid="toolbar-emoji"
+              selected={activeTool.type === "emoji"}
+              disabled={isToolButtonDisabled(app, "emoji")}
+            >
+              {t("toolBar.emoji")}
             </DropdownMenu.Item>
           )}
 

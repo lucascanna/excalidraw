@@ -1,0 +1,114 @@
+// the picker is built from PropertiesPopover, QuickSearch, ScrollableList,
+// DropdownMenuGroup and the color picker's swatch button
+.excalidraw {
+  --emoji-font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    "Segoe UI Symbol", sans-serif;
+
+  .emoji-picker-popover > .Island {
+    width: 17.5rem;
+    box-sizing: border-box;
+  }
+
+  .emoji-picker-popover--bottom-bar {
+    width: var(--radix-popover-trigger-width);
+
+    > .Island {
+      width: 100%;
+    }
+
+    .QuickSearch__wrapper {
+      height: 2.75rem;
+    }
+
+    .QuickSearch__input {
+      height: 100%;
+      font-size: 1rem;
+    }
+
+    .emoji-picker__list {
+      max-height: 13.25rem;
+    }
+
+    .emoji-picker__grid {
+      grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr));
+    }
+
+    .emoji-picker__button.color-picker__button {
+      height: 2.75rem;
+    }
+
+    .emoji-picker__glyph {
+      font-size: 1.5rem;
+    }
+  }
+
+  .emoji-picker {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .emoji-picker__search {
+    flex: none;
+  }
+
+  .ScrollableList__wrapper.emoji-picker__list {
+    margin-top: 0.75rem;
+    max-height: 15.5rem;
+    max-width: none;
+    padding: 2px;
+
+    .dropdown-menu-group:not(:first-child) {
+      margin-top: 0.75rem;
+    }
+
+    .dropdown-menu-group-title {
+      font-size: 0.75rem;
+      text-align: left;
+      font-weight: 400;
+      margin: 0 0 0.5rem;
+      line-height: 1.3;
+    }
+  }
+
+  .emoji-picker__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(2rem, 1fr));
+    gap: 0.25rem;
+  }
+
+  .emoji-picker__button.color-picker__button {
+    width: 100%;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    cursor: pointer;
+
+    &:hover:not(.active) {
+      box-shadow: inset 0 0 0 1px var(--color-primary);
+    }
+  }
+
+  .emoji-picker__glyph {
+    font-family: var(--emoji-font-family);
+    font-size: 1.25rem;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  // the Emoji tool button shows the picked emoji while the tool is active
+  .emoji-tool-glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--emoji-font-family);
+    font-size: 1rem;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .emoji-tool-button {
+    display: flex;
+  }
+}

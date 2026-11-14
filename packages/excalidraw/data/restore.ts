@@ -108,6 +108,10 @@ import type {
 import type { MarkOptional, Mutable } from "@excalidraw/common/utility-types";
 
 import { getDefaultAppState } from "../appState";
+import {
+  isEmojiValue,
+  restoreRecentEmojis,
+} from "../components/EmojiPicker/recentEmojis";
 
 import {
   getNormalizedGridSize,
@@ -241,6 +245,8 @@ export const AllowedExcalidrawActiveTools: Record<
   autoshape: false,
   magicframe: false,
   bucketfill: true,
+  // the picked emoji is restored, but the tool re-arms from the picker
+  emoji: false,
 };
 
 export type RestoredDataState = {
@@ -1316,6 +1322,11 @@ export const restoreAppState = (
     ),
   };
   nextAppState.fontTopPicks = restoreFontTopPicks(nextAppState.fontTopPicks);
+  // imported data is untrusted
+  nextAppState.recentEmojis = restoreRecentEmojis(nextAppState.recentEmojis);
+  nextAppState.currentItemEmoji = isEmojiValue(nextAppState.currentItemEmoji)
+    ? nextAppState.currentItemEmoji
+    : null;
 
   // legacy
   if ((appState as any).currentItemStrokeWidth !== undefined) {

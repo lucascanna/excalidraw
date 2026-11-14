@@ -569,6 +569,7 @@ export const TOOL_TYPE = {
   laser: "laser",
   autoshape: "autoshape",
   bucketfill: "bucketfill",
+  emoji: "emoji",
 } as const;
 
 export const EDITOR_LS_KEYS = {

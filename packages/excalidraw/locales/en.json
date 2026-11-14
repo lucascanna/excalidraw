@@ -344,6 +344,7 @@
     "laser": "Laser pointer",
     "autoshape": "Draw to shape",
     "bucketfill": "Bucket fill",
+    "emoji": "Emoji",
     "hand": "Hand (panning tool)",
     "extraTools": "More tools",
     "mermaidToExcalidraw": "Mermaid to Excalidraw",
@@ -385,6 +386,7 @@
     "text": "Tip: you can also add text by double-clicking anywhere with the selection tool",
     "embeddable": "Click-drag to create a website embed",
     "stickynote": "Click to place a note, or drag to size it",
+    "emoji": "Click to stamp the emoji, or press <kbd>Escape</kbd> to stop",
     "autoshape": "Draw rectangles, circles, diamonds, lines and arrows",
     "text_selected": "Double-click or press {{shortcut}} to edit text",
     "text_editing": "Press {{shortcut_1}} or {{shortcut_2}} to finish editing",
@@ -737,6 +739,25 @@
     "empty": "No fonts found",
     "topPicksTip": "Tip: drag any font onto your top picks to pin it",
     "resetTopPicks": "Reset to default top picks"
+  },
+  "emojiPicker": {
+    "title": "Emoji picker",
+    "searchPlaceholder": "Search emoji",
+    "empty": "No emoji found",
+    "loading": "Loading emoji…",
+    "loadError": "Couldn't load the emoji",
+    "recentlyUsed": "Recently used",
+    "groups": {
+      "smileys": "Smileys & emotion",
+      "people": "People & body",
+      "animals": "Animals & nature",
+      "food": "Food & drink",
+      "travel": "Travel & places",
+      "activities": "Activities",
+      "objects": "Objects",
+      "symbols": "Symbols",
+      "flags": "Flags"
+    }
   },
   "userList": {
     "empty": "No users found",

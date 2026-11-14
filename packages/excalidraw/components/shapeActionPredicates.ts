@@ -6,6 +6,7 @@ import {
   getColorTargetElement,
   hasBoundTextElement,
   isElbowArrow,
+  isEmojiStampElement,
   isImageElement,
   isLinearElement,
   isTextElement,
@@ -179,7 +180,9 @@ export const getShapeActionPredicates = (
     cropEditor:
       !appState.croppingElementId &&
       singleSelected &&
-      isImageElement(targetElements[0]),
+      isImageElement(targetElements[0]) &&
+      // an emoji stamp is not cropped
+      !isEmojiStampElement(targetElements[0]),
     lineEditor:
       !appState.selectedLinearElement?.isEditing &&
       singleSelected &&

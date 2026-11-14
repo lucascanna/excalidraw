@@ -1,4 +1,4 @@
-import { isImageElement } from "@excalidraw/element";
+import { isEmojiStampElement, isImageElement } from "@excalidraw/element";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
 
@@ -37,7 +37,9 @@ export const actionToggleCropEditor = register({
     if (
       !appState.croppingElementId &&
       selectedElements.length === 1 &&
-      isImageElement(selectedElements[0])
+      isImageElement(selectedElements[0]) &&
+      // an emoji stamp is not cropped
+      !isEmojiStampElement(selectedElements[0])
     ) {
       return true;
     }

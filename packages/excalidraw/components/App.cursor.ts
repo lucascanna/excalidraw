@@ -2,6 +2,7 @@ import { CURSOR_TYPE, MIME_TYPES, THEME } from "@excalidraw/common";
 
 import { isHandToolActive, isEraserActive } from "../appState";
 
+import { renderEmojiToCanvas } from "./EmojiPicker/emojiRender";
 import { bucketFillIconSvgPaths } from "./icons";
 
 import type { AppState, DataURL } from "../types";
@@ -35,6 +36,21 @@ const createBucketFillCursorDataURL = (color: string) => {
   )}`;
 };
 
+/** the emoji tool's cursor: the picked emoji, its center the hotspot */
+const EMOJI_CURSOR_SIZE = 32;
+const emojiCursorDataURLs = new Map<string, string | null>();
+
+const getEmojiCursorDataURL = (emoji: string) => {
+  if (!emojiCursorDataURLs.has(emoji)) {
+    const canvas = renderEmojiToCanvas(emoji, EMOJI_CURSOR_SIZE, 0.06);
+    emojiCursorDataURLs.set(
+      emoji,
+      canvas ? canvas.toDataURL(MIME_TYPES.png) : null,
+    );
+  }
+  return emojiCursorDataURLs.get(emoji) ?? null;
+};
+
 /**
  * Captures all cursor management for the interactive canvas.
  *
@@ -49,6 +65,7 @@ export class AppCursor {
     type: AppState["activeTool"]["type"];
     bucketFillColor?: string;
     theme?: AppState["theme"];
+    emoji?: string | null;
   } | null = null;
 
   private eraserCanvasCache:
@@ -114,12 +131,15 @@ export class AppCursor {
             theme,
           )
         : undefined;
+    const emoji =
+      activeTool.type === "emoji" ? this.app.state.currentItemEmoji : undefined;
     const memo = this.toolCursorMemo;
     if (
       memo?.canvas === canvas &&
       memo.type === activeTool.type &&
       memo.bucketFillColor === bucketFillColor &&
-      memo.theme === theme
+      memo.theme === theme &&
+      memo.emoji === emoji
     ) {
       return;
     }
@@ -136,6 +156,14 @@ export class AppCursor {
       // The hotspot is the center of the paint droplet in the icon.
       this.set(
         `url(${createBucketFillCursorDataURL(bucketFillColor!)}) 5 18, auto`,
+      );
+    } else if (activeTool.type === "emoji") {
+      const url = emoji ? getEmojiCursorDataURL(emoji) : null;
+      const hotspot = EMOJI_CURSOR_SIZE / 2;
+      this.set(
+        url
+          ? `url(${url}) ${hotspot} ${hotspot}, ${CURSOR_TYPE.CROSSHAIR}`
+          : CURSOR_TYPE.CROSSHAIR,
       );
     } else if (activeTool.type === "laser") {
       const url =
@@ -157,6 +185,7 @@ export class AppCursor {
       type: activeTool.type,
       bucketFillColor,
       theme,
+      emoji,
     };
   };
 

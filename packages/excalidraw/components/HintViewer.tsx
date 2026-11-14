@@ -2,6 +2,7 @@ import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@excalidraw/common";
 
 import {
   isArrowElement,
+  isEmojiStampElement,
   isFlowchartNodeElement,
   isImageElement,
   isLinearElement,
@@ -109,6 +110,11 @@ const getHints = ({
     return t("hints.stickynote");
   }
 
+  if (activeTool.type === "emoji") {
+    // spells out "Escape" (the approved hint), unlike the "Esc" key label
+    return t("hints.emoji");
+  }
+
   if (activeTool.type === "autoshape") {
     return t("hints.autoshape");
   }
@@ -172,7 +178,12 @@ const getHints = ({
     });
   }
 
-  if (selectedElements.length === 1 && isImageElement(selectedElements[0])) {
+  if (
+    selectedElements.length === 1 &&
+    isImageElement(selectedElements[0]) &&
+    // an emoji stamp is not cropped
+    !isEmojiStampElement(selectedElements[0])
+  ) {
     return t("hints.enterCropEditor", {
       shortcut: getTaggedShortcutKey("Enter"),
     });

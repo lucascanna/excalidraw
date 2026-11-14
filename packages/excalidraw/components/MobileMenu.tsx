@@ -1,3 +1,4 @@
+import { Popover } from "radix-ui";
 import React from "react";
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
@@ -8,6 +9,7 @@ import { getScrollToContentState } from "../scene";
 import { SCROLLBAR_WIDTH, SCROLLBAR_MARGIN } from "../scene/scrollbars";
 
 import { ExitViewModeButton, MobileShapeActions } from "./Actions";
+import { EmojiPicker } from "./EmojiPicker/EmojiPicker";
 import { MobileToolbar } from "./MobileToolbar";
 import { FixedSideContainer } from "./FixedSideContainer";
 
@@ -158,32 +160,53 @@ export const MobileMenu = ({
       </div>
 
       {shouldRenderDefaultBottomBar && (
-        <div
-          className="App-bottom-bar"
-          style={{
-            marginBottom: SCROLLBAR_WIDTH + SCROLLBAR_MARGIN,
+        // the emoji picker opens above the bottom bar, as wide as it
+        <Popover.Root
+          open={appState.openPopup === "emojiPicker"}
+          onOpenChange={(open) => {
+            if (!open) {
+              app.emojiStamp.closePicker();
+            }
           }}
-          data-viewport-ui="bottom"
         >
-          {scrollBackToContentButton && (
-            <div className="floating-status-stack">
-              {scrollBackToContentButton}
+          <Popover.Anchor asChild>
+            <div
+              className="App-bottom-bar"
+              style={{
+                marginBottom: SCROLLBAR_WIDTH + SCROLLBAR_MARGIN,
+              }}
+              data-viewport-ui="bottom"
+            >
+              {scrollBackToContentButton && (
+                <div className="floating-status-stack">
+                  {scrollBackToContentButton}
+                </div>
+              )}
+
+              <MobileShapeActions
+                appState={appState}
+                elementsMap={app.scene.getNonDeletedElementsMap()}
+                renderAction={actionManager.renderAction}
+                app={app}
+                setAppState={setAppState}
+              />
+
+              <Island className="App-toolbar">
+                {appState.openDialog?.name !== "elementLinkSelector" &&
+                  renderToolbar()}
+              </Island>
             </div>
+          </Popover.Anchor>
+          {appState.openPopup === "emojiPicker" && (
+            <EmojiPicker
+              placement="bottom-bar"
+              selectedEmoji={appState.currentItemEmoji}
+              recentEmojis={appState.recentEmojis}
+              onPick={app.emojiStamp.pick}
+              onClose={app.emojiStamp.closePicker}
+            />
           )}
-
-          <MobileShapeActions
-            appState={appState}
-            elementsMap={app.scene.getNonDeletedElementsMap()}
-            renderAction={actionManager.renderAction}
-            app={app}
-            setAppState={setAppState}
-          />
-
-          <Island className="App-toolbar">
-            {appState.openDialog?.name !== "elementLinkSelector" &&
-              renderToolbar()}
-          </Island>
-        </div>
+        </Popover.Root>
       )}
 
       {!shouldRenderDefaultBottomBar && scrollBackToContentButton && (

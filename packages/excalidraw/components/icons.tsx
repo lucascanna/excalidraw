@@ -1998,6 +1998,18 @@ export const stickyNoteToolIcon = createIcon(
   tablerIconProps,
 );
 
+// tabler icons: mood-smile
+export const emojiToolIcon = createIcon(
+  <g strokeWidth={1.5}>
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+    <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
+    <path d="M9 10l.01 0"></path>
+    <path d="M15 10l.01 0"></path>
+    <path d="M9.5 15a3.5 3.5 0 0 0 5 0"></path>
+  </g>,
+  tablerIconProps,
+);
+
 export const mermaidLogoIcon = createIcon(
   <path
     fill="currentColor"

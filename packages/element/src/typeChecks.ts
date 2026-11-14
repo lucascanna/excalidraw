@@ -44,6 +44,20 @@ export const isImageElement = <T extends ExcalidrawElement>(
   return !!element && element.type === "image";
 };
 
+/**
+ * An image element stamped by the emoji tool: its picture is the emoji
+ * (kept in `customData.emoji`) rendered from the system emoji font.
+ */
+export const isEmojiStampElement = <T extends ExcalidrawElement>(
+  element: T | null | undefined,
+): element is T & ExcalidrawImageElement => {
+  return (
+    !!element &&
+    element.type === "image" &&
+    typeof element.customData?.emoji === "string"
+  );
+};
+
 export const isEmbeddableElement = <T extends ExcalidrawElement>(
   element: T | null | undefined,
 ): element is T & ExcalidrawEmbeddableElement => {

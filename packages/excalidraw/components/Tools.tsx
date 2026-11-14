@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { Popover } from "radix-ui";
 import { useEffect, useState } from "react";
 
 import { KEYS, capitalizeString } from "@excalidraw/common";
@@ -9,8 +10,11 @@ import { trackEvent } from "../analytics";
 import { t } from "../i18n";
 import { getShortcutKey } from "../shortcut";
 
+import { useExcalidrawAppState } from "./App";
+import { EmojiPicker } from "./EmojiPicker/EmojiPicker";
 import { IconButton } from "./IconButton";
 import { ToolPopover } from "./ToolPopover";
+import { hideTooltip, showTooltip } from "./Tooltip";
 import {
   SelectionIcon,
   RectangleIcon,
@@ -30,6 +34,7 @@ import {
   frameToolIcon,
   EmbedIcon,
   stickyNoteToolIcon,
+  emojiToolIcon,
 } from "./icons";
 
 import type {
@@ -156,6 +161,10 @@ export const TOOLS = defineTools({
   lasso: {
     icon: LassoIcon,
     fillable: false,
+  },
+  emoji: {
+    icon: emojiToolIcon,
+    letterKey: KEYS.J,
   },
 });
 
@@ -337,6 +346,122 @@ export const StickyNoteToolButton = createToolButton("stickynote");
 export const ImageToolButton = createToolButton("image");
 export const EraserToolButton = createToolButton("eraser");
 export const FrameToolButton = createToolButton("frame");
+
+/**
+ * The emoji tool button. Activating it opens the emoji picker (a second
+ * activation closes it); picking an emoji arms the tool, and the button then
+ * shows the picked emoji. Its tooltip is the editor's, on hover and on
+ * keyboard focus.
+ */
+export const EmojiToolButton = ({
+  app,
+  activeTool,
+  hideKeyBinding,
+  hideShortcut,
+  withPicker = true,
+}: ToolButtonComponentProps & {
+  /**
+   * render the picker under the button; off where the picker is anchored
+   * elsewhere (the phone's bottom bar)
+   */
+  withPicker?: boolean;
+}) => {
+  const appState = useExcalidrawAppState();
+  const label = capitalizeString(t("toolBar.emoji"));
+  const shortcut = hideShortcut ? null : getToolShortcut("emoji");
+  const tooltip = shortcut ? `${label} — ${shortcut}` : label;
+  const tooltipPosition = withPicker ? "bottom" : "top";
+  const isPickerOpen = appState.openPopup === "emojiPicker";
+  const isActive = activeTool.type === "emoji";
+  const emoji = appState.currentItemEmoji;
+  const disabled = isToolButtonDisabled(app, "emoji");
+
+  const button = (
+    <div
+      className="emoji-tool-button"
+      onPointerEnter={(event) => {
+        if (!disabled && !isPickerOpen) {
+          showTooltip(event.currentTarget, tooltip, {
+            delay: true,
+            position: tooltipPosition,
+          });
+        }
+      }}
+      onPointerLeave={hideTooltip}
+      onFocus={(event) => {
+        if (
+          !disabled &&
+          !isPickerOpen &&
+          event.target.matches?.(":focus-visible")
+        ) {
+          showTooltip(event.currentTarget, tooltip, {
+            position: tooltipPosition,
+          });
+        }
+      }}
+      onBlur={hideTooltip}
+    >
+      <IconButton
+        type="toggle"
+        icon={
+          isActive && emoji ? (
+            <span className="emoji-tool-glyph" aria-hidden="true">
+              {emoji}
+            </span>
+          ) : (
+            TOOLS.emoji.icon
+          )
+        }
+        checked={isActive}
+        disabled={disabled}
+        keyBindingLabel={
+          hideKeyBinding || hideShortcut ? undefined : getToolLetter("emoji")
+        }
+        aria-label={label}
+        aria-keyshortcuts={shortcut ?? undefined}
+        aria-haspopup="dialog"
+        aria-expanded={isPickerOpen}
+        data-testid="toolbar-emoji"
+        onSelect={({ pointerType }) => {
+          hideTooltip();
+          if (!app.state.penDetected && pointerType === "pen") {
+            app.togglePenMode(true);
+          }
+          if (!isPickerOpen) {
+            trackEvent("toolbar", "emoji", "ui");
+          }
+          app.setActiveTool({ type: "emoji" }, { toggle: true });
+        }}
+      />
+    </div>
+  );
+
+  if (!withPicker) {
+    return button;
+  }
+
+  return (
+    <Popover.Root
+      open={isPickerOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          app.emojiStamp.closePicker();
+        }
+      }}
+    >
+      <Popover.Anchor asChild>{button}</Popover.Anchor>
+      {isPickerOpen && (
+        <EmojiPicker
+          placement="toolbar"
+          selectedEmoji={emoji}
+          recentEmojis={appState.recentEmojis}
+          onPick={app.emojiStamp.pick}
+          onClose={app.emojiStamp.closePicker}
+        />
+      )}
+    </Popover.Root>
+  );
+};
 
 /**
  * The selection tool button — pointer-clicking it while the selection tool
