@@ -625,6 +625,12 @@ describe("emoji tool", () => {
           : mouse.doubleClickAt(200, 200);
       enterCrop();
       expect(h.state.croppingElementId).toBeNull();
+      // Double-click falls through to text editing for a non-croppable stamp.
+      // Discard that state before exercising the normal image crop path.
+      API.setAppState({
+        editingTextElement: null,
+        selectedElementIds: { [stamp().id]: true },
+      });
       // mutateElement ignores undefined updates; an empty object removes the marker.
       API.updateElement(stamp(), { customData: {} });
       expect(predicates().cropEditor).toBe(true);
@@ -786,7 +792,8 @@ describe("emoji on phones", () => {
     "opens the picker from the appropriate toolbar slot at %s px",
     async (width) => {
       mockBoundingClientRect({
-        width: width - 32,
+        // Bottom bar: viewport minus 28px; Island: 4px padding per side.
+        width: width - 36,
         height: width === 390 ? 844 : 640,
       });
       await render(<Excalidraw generateIdForFile={generateIdForFile} />);
