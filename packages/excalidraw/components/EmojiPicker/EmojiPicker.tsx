@@ -34,8 +34,12 @@ const noop = () => {};
  * not also dismiss the picker as an outside interaction
  */
 const isEmojiToolButton = (target: EventTarget | null) =>
-  target instanceof Element &&
-  !!target.closest(".emoji-tool-button, [data-testid='toolbar-emoji']");
+  // no `instanceof Element`: the editor may live in another document (iframe,
+  // popout window), whose elements belong to another realm
+  typeof (target as Element | null)?.closest === "function" &&
+  !!(target as Element).closest(
+    ".emoji-tool-button, [data-testid='toolbar-emoji']",
+  );
 
 /** the tile in the previous (-1) or next (1) row closest to the tile at `index` */
 const getTileInAdjacentRow = (

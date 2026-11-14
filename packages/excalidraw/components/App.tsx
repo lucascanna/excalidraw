@@ -5776,10 +5776,11 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     if (tool.type === TOOL_TYPE.emoji && !opts.emojiPicked) {
+      // the requested lock applies once a pick arms the tool
       if (opts.toggle) {
-        this.emojiStamp.togglePicker();
+        this.emojiStamp.togglePicker(tool.locked);
       } else {
-        this.emojiStamp.openPicker();
+        this.emojiStamp.openPicker(tool.locked);
       }
       return;
     }

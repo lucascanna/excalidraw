@@ -1,11 +1,13 @@
 import { getGridPoint, MIME_TYPES } from "@excalidraw/common";
 
 import {
+  CaptureUpdateAction,
   makeNextSelectedElementIds,
+  newElementWith,
   newImageElement,
 } from "@excalidraw/element";
 
-import type { FileId } from "@excalidraw/element/types";
+import type { ExcalidrawImageElement, FileId } from "@excalidraw/element/types";
 
 import { dataURLToFile, generateIdFromFile } from "../data/blob";
 import { t } from "../i18n";
@@ -51,9 +53,17 @@ export class AppEmojiStamp {
    */
   private pending: ScenePoint | null = null;
 
+  /**
+   * the tool lock asked for by the activation that opened the picker
+   * (`setActiveTool({ type: "emoji", locked })`), applied when a pick arms
+   * the tool; `undefined` keeps the current lock
+   */
+  private requestedLock: boolean | undefined;
+
   isPickerOpen = () => this.app.state.openPopup === "emojiPicker";
 
-  openPicker = () => {
+  openPicker = (locked?: boolean) => {
+    this.requestedLock = locked;
     this.app.setState({ openPopup: "emojiPicker", openMenu: null });
   };
 
@@ -63,11 +73,11 @@ export class AppEmojiStamp {
     }
   };
 
-  togglePicker = () => {
+  togglePicker = (locked?: boolean) => {
     if (this.isPickerOpen()) {
       this.closePicker();
     } else {
-      this.openPicker();
+      this.openPicker(locked);
     }
   };
 
@@ -81,7 +91,9 @@ export class AppEmojiStamp {
     }));
     // render the picture now, so that the first click stamps at once
     void this.prepareFile(emoji);
-    this.app.setActiveTool({ type: "emoji" }, { emojiPicked: true });
+    const locked = this.requestedLock;
+    this.requestedLock = undefined;
+    this.app.setActiveTool({ type: "emoji", locked }, { emojiPicked: true });
   };
 
   /** arms a stamp at the pointer-down position; nothing mutates yet */
@@ -103,60 +115,16 @@ export class AppEmojiStamp {
     this.pending = null;
   };
 
+  /** one undoable step: the stamp, centered on the click, selected */
   private stamp = (scenePointer: ScenePoint) => {
     const emoji = this.app.state.currentItemEmoji;
     if (!emoji) {
       return;
     }
-    const file = this.files.get(emoji);
-    if (file) {
-      this.insert(emoji, file, scenePointer);
-      return;
-    }
-    this.prepareFile(emoji).then((file) => {
-      if (file) {
-        this.insert(emoji, file, scenePointer);
-      } else {
-        this.app.setState({ errorMessage: t("errors.imageInsertError") });
-      }
-    });
-  };
-
-  /** one undoable step: the stamp, centered on the click, selected */
-  private insert = (
-    emoji: string,
-    file: StampFile,
-    scenePointer: ScenePoint,
-  ) => {
-    const [x, y] = getGridPoint(
-      scenePointer.x,
-      scenePointer.y,
-      this.app.getEffectiveGridSize(),
-    );
-    const frame = this.app.getTopLayerFrameAtSceneCoords({ x, y });
-
-    const element = newImageElement({
-      type: "image",
-      x: x - EMOJI_STAMP_SIZE / 2,
-      y: y - EMOJI_STAMP_SIZE / 2,
-      width: EMOJI_STAMP_SIZE,
-      height: EMOJI_STAMP_SIZE,
-      fileId: file.id as FileId,
-      status: "pending",
-      backgroundColor: "transparent",
-      roundness: null,
-      opacity: this.app.state.currentItemOpacity,
-      locked: false,
-      frameId: frame ? frame.id : null,
-      customData: { emoji },
-    });
+    const file = this.files.get(emoji) ?? null;
+    const element = this.newStampElement(emoji, file, scenePointer);
 
     this.app.insertNewElements([element]);
-    // after the element is in the scene, so that its picture gets cached
-    this.app.addFiles([
-      { ...file, created: Date.now(), lastRetrieved: Date.now() },
-    ]);
-
     // with the tool locked, the next click stamps another one
     if (!this.app.isToolLocked()) {
       this.app.setState((prevState) => ({
@@ -168,7 +136,88 @@ export class AppEmojiStamp {
         editingGroupId: null,
       }));
     }
-    this.app.scheduleCapture();
+
+    if (file) {
+      // after the element is in the scene, so that its picture gets cached
+      this.addFile(file);
+      this.app.scheduleCapture();
+      return;
+    }
+
+    // the picture is still rendering (the pick prepares it, so only a click
+    // right after the pick waits): like the image tool's placeholders, the
+    // stamp waits in the scene for its file, then lands as one undoable step,
+    // unless it left the scene meanwhile (deleted, or the scene replaced)
+    this.prepareFile(emoji).then((file) => {
+      if (this.app.unmounted) {
+        return;
+      }
+      const placeholder = this.app.scene.getElement(element.id);
+      if (!placeholder || placeholder.isDeleted) {
+        return;
+      }
+      if (!file) {
+        this.app.updateScene({
+          elements: this.app.scene
+            .getElementsIncludingDeleted()
+            .map((el) =>
+              el.id === element.id
+                ? newElementWith(el, { isDeleted: true })
+                : el,
+            ),
+          captureUpdate: CaptureUpdateAction.EVENTUALLY,
+        });
+        this.app.setState({ errorMessage: t("errors.imageInsertError") });
+        return;
+      }
+      this.app.updateScene({
+        elements: this.app.scene.getElementsIncludingDeleted().map((el) =>
+          el.id === element.id
+            ? newElementWith(el as ExcalidrawImageElement, {
+                fileId: file.id as FileId,
+              })
+            : el,
+        ),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      this.addFile(file);
+    });
+  };
+
+  private addFile = (file: StampFile) => {
+    this.app.addFiles([
+      { ...file, created: Date.now(), lastRetrieved: Date.now() },
+    ]);
+  };
+
+  /** the stamp, centered on the click; without a file while it renders */
+  private newStampElement = (
+    emoji: string,
+    file: StampFile | null,
+    scenePointer: ScenePoint,
+  ) => {
+    const [x, y] = getGridPoint(
+      scenePointer.x,
+      scenePointer.y,
+      this.app.getEffectiveGridSize(),
+    );
+    const frame = this.app.getTopLayerFrameAtSceneCoords({ x, y });
+
+    return newImageElement({
+      type: "image",
+      x: x - EMOJI_STAMP_SIZE / 2,
+      y: y - EMOJI_STAMP_SIZE / 2,
+      width: EMOJI_STAMP_SIZE,
+      height: EMOJI_STAMP_SIZE,
+      fileId: file ? (file.id as FileId) : null,
+      status: "pending",
+      backgroundColor: "transparent",
+      roundness: null,
+      opacity: this.app.state.currentItemOpacity,
+      locked: false,
+      frameId: frame ? frame.id : null,
+      customData: { emoji },
+    });
   };
 
   /** the stamp picture of `emoji`, rendered once per session */

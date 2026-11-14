@@ -77,9 +77,11 @@ export const searchEmojiGroups = (
   return groups
     .map((group) => ({
       ...group,
-      emoji: group.emoji.filter(([, name]) =>
-        words.every((word) => name.includes(word)),
-      ),
+      emoji: group.emoji.filter(([, name]) => {
+        // names keep their capitals ("flag: Italy")
+        const lowerCaseName = name.toLowerCase();
+        return words.every((word) => lowerCaseName.includes(word));
+      }),
     }))
     .filter((group) => group.emoji.length);
 };
