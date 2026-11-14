@@ -111,9 +111,8 @@ const getHints = ({
   }
 
   if (activeTool.type === "emoji") {
-    return t("hints.emoji", {
-      shortcut: getTaggedShortcutKey("Escape"),
-    });
+    // spells out "Escape" (the approved hint), unlike the "Esc" key label
+    return t("hints.emoji");
   }
 
   if (activeTool.type === "autoshape") {
