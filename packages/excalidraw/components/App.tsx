@@ -682,6 +682,8 @@ class App extends React.Component<AppProps, AppState> {
 
   public bucketFill: AppBucketFill = new AppBucketFill(this);
   public emojiStamp: AppEmojiStamp = new AppEmojiStamp(this);
+  /** the canvas press only dismissed the emoji picker: so does its release */
+  private pointerDownDismissedEmojiPicker = false;
   public duplicate: AppDuplicate = new AppDuplicate(this);
   public toolDrag: AppToolDrag = new AppToolDrag(this);
   public flowchart: AppFlowchart = new AppFlowchart(this);
@@ -7646,7 +7648,8 @@ class App extends React.Component<AppProps, AppState> {
       this.setAppState({ snapLines: [] });
     }
 
-    if (this.emojiStamp.isPickerOpen()) {
+    this.pointerDownDismissedEmojiPicker = this.emojiStamp.isPickerOpen();
+    if (this.pointerDownDismissedEmojiPicker) {
       // a press outside the emoji picker only dismisses it: it neither
       // stamps nor changes the selection or the tool
       this.setState({ openPopup: null });
@@ -8084,6 +8087,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerCancel = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
+    this.pointerDownDismissedEmojiPicker = false;
     this.removePointer(event);
     this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
   };
@@ -8107,6 +8111,13 @@ class App extends React.Component<AppProps, AppState> {
       event,
     );
     this.lastPointerUpEvent = event;
+
+    if (this.pointerDownDismissedEmojiPicker) {
+      // the release of a press that only dismissed the emoji picker (no
+      // link or embed click either)
+      this.pointerDownDismissedEmojiPicker = false;
+      return;
+    }
 
     if (!event.ctrlKey) {
       const preferenceEnabled = this.state.bindingPreference === "enabled";
