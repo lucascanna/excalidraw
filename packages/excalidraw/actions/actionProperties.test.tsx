@@ -334,13 +334,43 @@ describe("arrows bound to text whose font changes", () => {
     return { fontSize, fontFamily, x, y, points };
   };
 
-  const selectLilitaOne = () => {
+  const getTextBounds = (text: ExcalidrawTextElement) => {
+    const { x, y, width, height } = API.getElement(text);
+    return { x, y, width, height };
+  };
+
+  const selectFont = (fontFamily: ExcalidrawTextElement["fontFamily"]) => {
     act(() => {
       h.app.actionManager.executeAction(actionChangeFontFamily, "api", {
-        currentItemFontFamily: lilitaOne,
+        currentItemFontFamily: fontFamily,
         currentHoveredFontFamily: null,
       });
     });
+  };
+
+  const selectPendingFont = (
+    fontFamily: ExcalidrawTextElement["fontFamily"],
+  ) => {
+    const fonts = h.app.ownerDocument.fonts;
+    const loaded = resolvablePromise<FontFace[]>();
+    vi.mocked(fonts.check).mockReturnValueOnce(false);
+    vi.mocked(fonts.load).mockReturnValueOnce(loaded);
+    selectFont(fontFamily);
+
+    return () =>
+      act(async () => {
+        loaded.resolve([]);
+        await loaded;
+      });
+  };
+
+  const leaveFontPreview = () => {
+    const popover = screen
+      .getByPlaceholderText(t("quickSearch.placeholder"))
+      .closest(".properties-content");
+    expect(popover).not.toBeNull();
+    fireEvent.pointerLeave(popover!);
+    expect(h.state.currentHoveredFontFamily).toBeNull();
   };
 
   beforeEach(async () => {
@@ -366,7 +396,7 @@ describe("arrows bound to text whose font changes", () => {
           expect(API.getElement(text).fontSize).toBe(FONT_SIZES.xl);
         } else {
           vi.mocked(h.app.ownerDocument.fonts.check).mockReturnValueOnce(true);
-          selectLilitaOne();
+          selectFont(lilitaOne);
           expect(API.getElement(text).fontFamily).toBe(lilitaOne);
         }
         const after = getFontAndRoute(text, arrow);
@@ -413,12 +443,7 @@ describe("arrows bound to text whose font changes", () => {
       expect(API.getElement(text).fontFamily).toBe(FONT_FAMILY.Nunito);
       expect(getEndpoint(arrow)).toEqual(endBefore);
 
-      const popover = screen
-        .getByPlaceholderText(t("quickSearch.placeholder"))
-        .closest(".properties-content");
-      expect(popover).not.toBeNull();
-      fireEvent.pointerLeave(popover!);
-      expect(h.state.currentHoveredFontFamily).toBeNull();
+      leaveFontPreview();
       expect(API.getElement(text).height).toBe(heightBefore);
       expect(getFontAndRoute(text, arrow)).toEqual(before);
     });
@@ -430,23 +455,137 @@ describe("arrows bound to text whose font changes", () => {
       API.setSelectedElements([API.getElement(text)]);
       const endBefore = getEndpoint(arrow);
       const heightBefore = API.getElement(text).height;
-      const fonts = h.app.ownerDocument.fonts;
-      const loaded = resolvablePromise<FontFace[]>();
-      vi.mocked(fonts.check).mockReturnValueOnce(false);
-      vi.mocked(fonts.load).mockReturnValueOnce(loaded);
-
-      selectLilitaOne();
+      const finishLoading = selectPendingFont(lilitaOne);
       expect(API.getElement(text).fontFamily).toBe(lilitaOne);
       expect(API.getElement(text).height).toBe(heightBefore);
       expect(getEndpoint(arrow)).toEqual(endBefore);
 
-      await act(async () => {
-        loaded.resolve([]);
-        await loaded;
-      });
+      await finishLoading();
 
       expect(API.getElement(text).height).toBeLessThan(heightBefore);
       expect(getEndpoint(arrow)[1]).toBeLessThan(endBefore[1]);
+    });
+
+    it("undoes and redoes late font layout separately from the font pick and unrelated drawing", async () => {
+      const text = createText(100, 40);
+      API.setElements([text]);
+      const arrow = drawArrow(text, elbowed);
+      API.setSelectedElements([API.getElement(text)]);
+
+      const getFontLayout = () => ({
+        ...getFontAndRoute(text, arrow),
+        textBounds: getTextBounds(text),
+      });
+      const original = getFontLayout();
+      const finishLoading = selectPendingFont(lilitaOne);
+      const beforeLoad = getFontLayout();
+      expect(beforeLoad).toEqual({ ...original, fontFamily: lilitaOne });
+
+      await finishLoading();
+      const afterLoad = getFontLayout();
+      expect(afterLoad.fontFamily).toBe(lilitaOne);
+      expect(afterLoad.textBounds.height).toBeLessThan(
+        beforeLoad.textBounds.height,
+      );
+      expect(afterLoad.points).not.toEqual(beforeLoad.points);
+
+      const rectangle = UI.createElement("rectangle", {
+        x: 500,
+        y: 100,
+        size: 80,
+      });
+      const getRectangle = () => h.app.scene.getNonDeletedElement(rectangle.id);
+      expect(getRectangle()).not.toBeNull();
+
+      Keyboard.undo();
+      expect(getRectangle()).toBeNull();
+      expect(getFontLayout()).toEqual(afterLoad);
+
+      Keyboard.undo();
+      expect(getRectangle()).toBeNull();
+      expect(getFontLayout()).toEqual(beforeLoad);
+
+      Keyboard.undo();
+      expect(getRectangle()).toBeNull();
+      expect(getFontLayout()).toEqual(original);
+
+      Keyboard.redo();
+      expect(getRectangle()).toBeNull();
+      expect(getFontLayout()).toEqual(beforeLoad);
+
+      Keyboard.redo();
+      expect(getRectangle()).toBeNull();
+      expect(getFontLayout()).toEqual(afterLoad);
+
+      Keyboard.redo();
+      expect(getRectangle()).not.toBeNull();
+      expect(getFontLayout()).toEqual(afterLoad);
+    });
+
+    it("keeps the arrow in place when a pending pick loads during a font preview", async () => {
+      const text = createText(100, 40);
+      API.setElements([text]);
+      const arrow = drawArrow(text, elbowed);
+      API.setSelectedElements([API.getElement(text)]);
+      const original = getFontAndRoute(text, arrow);
+      const endBefore = getEndpoint(arrow);
+      const finishNunitoLoad = selectPendingFont(FONT_FAMILY.Nunito);
+      const boundsBeforePreview = getTextBounds(text);
+      expect(getFontAndRoute(text, arrow)).toEqual({
+        ...original,
+        fontFamily: FONT_FAMILY.Nunito,
+      });
+
+      togglePopover(t("labels.showFonts"));
+      fireEvent.mouseMove(screen.getByTitle("Lilita One"));
+      expect(h.state.currentHoveredFontFamily).toBe(lilitaOne);
+      expect(API.getElement(text).fontFamily).toBe(lilitaOne);
+      expect(getTextBounds(text).height).toBeLessThan(
+        boundsBeforePreview.height,
+      );
+      expect(getEndpoint(arrow)).toEqual(endBefore);
+
+      await finishNunitoLoad();
+      expect(h.state.currentHoveredFontFamily).toBe(lilitaOne);
+      expect(getEndpoint(arrow)).toEqual(endBefore);
+
+      leaveFontPreview();
+      expect(getTextBounds(text)).toEqual(boundsBeforePreview);
+      expect(getFontAndRoute(text, arrow)).toEqual({
+        ...original,
+        fontFamily: FONT_FAMILY.Nunito,
+      });
+    });
+
+    it("reroutes only when the latest of two pending font picks loads", async () => {
+      const text = createText(100, 40);
+      API.setElements([text]);
+      const arrow = drawArrow(text, elbowed);
+      API.setSelectedElements([API.getElement(text)]);
+      const endBefore = getEndpoint(arrow);
+      const finishNunitoLoad = selectPendingFont(FONT_FAMILY.Nunito);
+      expect(API.getElement(text).fontFamily).toBe(FONT_FAMILY.Nunito);
+      const finishLilitaLoad = selectPendingFont(lilitaOne);
+      expect(API.getElement(text).fontFamily).toBe(lilitaOne);
+      expect(getEndpoint(arrow)).toEqual(endBefore);
+
+      await finishNunitoLoad();
+      expect(API.getElement(text).fontFamily).toBe(lilitaOne);
+      expect(getEndpoint(arrow)).toEqual(endBefore);
+
+      await finishLilitaLoad();
+      expect(API.getElement(text).fontFamily).toBe(lilitaOne);
+      const endAfter = getEndpoint(arrow);
+      expect(endAfter[1]).toBeLessThan(endBefore[1]);
+
+      const textX = API.getElement(text).x;
+      Keyboard.keyPress(KEYS.ARROW_RIGHT);
+      expect(API.getElement(text).x).toBeGreaterThan(textX);
+      Keyboard.keyPress(KEYS.ARROW_LEFT);
+      expect(API.getElement(text).x).toBe(textX);
+      const [nudgedX, nudgedY] = getEndpoint(arrow);
+      expect(endAfter[0]).toBeCloseTo(nudgedX, 6);
+      expect(endAfter[1]).toBeCloseTo(nudgedY, 6);
     });
   });
 
