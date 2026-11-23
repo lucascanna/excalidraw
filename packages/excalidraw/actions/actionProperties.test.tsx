@@ -385,14 +385,12 @@ describe("arrows bound to text whose font changes", () => {
         expect(API.getElement(text).x).toBe(textX);
 
         const [nudgedX, nudgedY] = getEndpoint(arrow);
-        expect(endAfter).toEqual([
-          expect.closeTo(nudgedX, 6),
-          expect.closeTo(nudgedY, 6),
-        ]);
+        expect(endAfter[0]).toBeCloseTo(nudgedX, 6);
+        expect(endAfter[1]).toBeCloseTo(nudgedY, 6);
       },
     );
 
-    it("leaves the arrow in place while previewing fonts and after Escape", () => {
+    it("leaves the arrow in place while previewing fonts and restores the text on pointer leave", () => {
       const text = createText(100, 40);
       API.setElements([text]);
       const arrow = drawArrow(text, elbowed);
@@ -405,21 +403,24 @@ describe("arrows bound to text whose font changes", () => {
       const lilitaOption = screen.getByTitle("Lilita One");
       fireEvent.mouseMove(lilitaOption);
       expect(h.state.currentHoveredFontFamily).toBe(lilitaOne);
+      expect(API.getElement(text).fontFamily).toBe(lilitaOne);
       expect(API.getElement(text).height).not.toBe(heightBefore);
       expect(getEndpoint(arrow)).toEqual(endBefore);
 
-      fireEvent.mouseMove(screen.getByTitle("Nunito"));
+      const nunitoOption = screen.getByTitle("Nunito");
+      fireEvent.mouseMove(nunitoOption);
       expect(h.state.currentHoveredFontFamily).toBe(FONT_FAMILY.Nunito);
+      expect(API.getElement(text).fontFamily).toBe(FONT_FAMILY.Nunito);
       expect(getEndpoint(arrow)).toEqual(endBefore);
 
-      Keyboard.keyPress(
-        KEYS.ESCAPE,
-        screen.getByPlaceholderText(t("quickSearch.placeholder")),
-      );
-      expect.soft(h.state.openPopup).toBeNull();
-      expect.soft(h.state.currentHoveredFontFamily).toBeNull();
-      expect.soft(API.getElement(text).height).toBe(heightBefore);
-      expect.soft(getFontAndRoute(text, arrow)).toEqual(before);
+      const popover = screen
+        .getByPlaceholderText(t("quickSearch.placeholder"))
+        .closest(".properties-content");
+      expect(popover).not.toBeNull();
+      fireEvent.pointerLeave(popover!);
+      expect(h.state.currentHoveredFontFamily).toBeNull();
+      expect(API.getElement(text).height).toBe(heightBefore);
+      expect(getFontAndRoute(text, arrow)).toEqual(before);
     });
 
     it("reroutes after the selected font finishes loading", async () => {
@@ -494,7 +495,7 @@ describe("arrows bound to text whose font changes", () => {
 
     expect(API.getElement(topText).fontSize).toBe(FONT_SIZES.xl);
     expect(API.getElement(bottomText).fontSize).toBe(FONT_SIZES.xl);
-    expect.soft(getEndpoint(arrow, 0)[1]).toBeGreaterThan(startBefore[1]);
-    expect.soft(getEndpoint(arrow)[1]).toBeLessThan(endBefore[1]);
+    expect(getEndpoint(arrow, 0)[1]).toBeGreaterThan(startBefore[1]);
+    expect(getEndpoint(arrow)[1]).toBeLessThan(endBefore[1]);
   });
 });
