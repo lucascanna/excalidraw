@@ -1384,13 +1384,30 @@ export const actionChangeFontFamily = register<{
             }
           }
 
-          // the redrawn texts are in the scene already
-          if (currentItemFontFamily) {
+          // the redrawn texts are in the scene already. Not during a hover
+          // preview (resetting it restores only the texts), and not for texts
+          // showing another font by now (a later pick still loading)
+          if (currentItemFontFamily && !app.state.currentHoveredFontFamily) {
+            let didReroute = false;
             for (const element of elementContainerMapping.keys()) {
               const latestElement = app.scene.getNonDeletedElement(element.id);
-              if (latestElement) {
+              if (
+                latestElement &&
+                isTextElement(latestElement) &&
+                latestElement.fontFamily === currentItemFontFamily
+              ) {
                 updateBoundElements(latestElement, app.scene);
+                didReroute = true;
               }
+            }
+
+            // the pick was captured before its font loaded: capture the new
+            // text bounds and arrows as their own step, so they don't join
+            // the next unrelated one
+            if (didReroute) {
+              app.syncActionResult({
+                captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+              });
             }
           }
 
